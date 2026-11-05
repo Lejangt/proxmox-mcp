@@ -48,6 +48,12 @@ Changes to `src/proxmox/client.ts`, `src/proxmox/tls.ts`, `src/proxmox/path.ts`,
 
 Tests and examples must not contain real host names, tokens or IP addresses. Use `example.com` names, addresses from `192.0.2.0/24` and the token ID `mcp@pve!agent`.
 
+## Branches
+
+- `dev` is the working branch. Open pull requests against `dev`, from a feature branch or a fork. Dependabot targets `dev` as well.
+- `main` holds what is ready to release. It changes only through a pull request from `dev`. A repository ruleset on `main` blocks direct pushes, force pushes and deletion, and requires the CI jobs `Node 22` and `Node 24` to pass on the latest commit. This applies to admins too.
+- Release tags are set on `main` after the pull request from `dev` is merged.
+
 ## Releasing
 
 Releases go to npm through [.github/workflows/release.yml](.github/workflows/release.yml) with [npm trusted publishing](https://docs.npmjs.com/trusted-publishers). The workflow gets a short lived OIDC token from GitHub Actions. No npm token is stored in the repository or its secrets.
@@ -56,10 +62,12 @@ Releases go to npm through [.github/workflows/release.yml](.github/workflows/rel
 
 1. Raise the version without creating a tag: `npm version <patch|minor|major> --no-git-tag-version`. This updates `package.json` and `package-lock.json`.
 2. In `CHANGELOG.md`, move the entries under `[Unreleased]` to a new section `[x.y.z] - YYYY-MM-DD`.
-3. Commit both changes to `main` and push.
-4. Tag that commit and push the tag:
+3. Commit both changes to `dev`, push, open a pull request from `dev` to `main` and merge it once CI is green.
+4. Tag the merged commit on `main` and push the tag:
 
    ```sh
+   git switch main
+   git pull
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
