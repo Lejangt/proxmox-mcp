@@ -325,13 +325,15 @@ interface ToolContext {
   from Proxmox, answers true when in doubt), `confirmTarget(args, ctx)`,
   `prepare(args, ctx)` (runs first and returns the arguments that
   needsConfirmation, the confirmation binding and the handler use, so state
-  pinned there is bound and sent, runs again for the answer) and `local`
+  pinned there is bound and sent, runs again for the answer, its result is
+  checked against the input schema with unknown keys refused and the host
+  unchanged, a failure ends the call before confirmation and handler) and `local`
   (never talks to Proxmox, no `host` argument, no client is resolved).
 - `confirmTarget` is required for every destructive tool and every tool with
   `needsConfirmation` (a test enforces it). It names the concrete target:
   VMID with name, type and node, node, argv, volume id, snapshot name,
-  storage id, job id, method, path and parameters (credential-like values
-  hidden), firewall level and rule. It may read from Proxmox through `ctx`
+  storage id, job id, method, path and parameters (values of the fixed list
+  `SECRET_PARAMS` in `src/tools/api.ts` hidden, everything else in full), firewall level and rule. It may read from Proxmox through `ctx`
   and falls back to the full arguments when a lookup fails. Values are JSON
   quoted and the whole question shows every character outside printable
   ASCII as `\uXXXX` (line separators, NEL, bidi controls), so a value cannot

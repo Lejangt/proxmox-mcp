@@ -490,4 +490,53 @@ describe('destructive confirmation', () => {
     expect(textOf(r)).toContain('different call');
     expect(seen).toEqual(['v1']);
   });
+
+  it('refuses a call whose prepare adds an unknown argument, sets an invalid value or changes the host', async () => {
+    const cases: Array<(a: Record<string, unknown>) => Record<string, unknown>> = [
+      (a) => ({ ...a, force: 1 }),
+      (a) => ({ ...a, vmid: 'all' }),
+      (a) => ({ ...a, host: 'prod' }),
+    ];
+    for (const change of cases) {
+      let ran = false;
+      let asked = false;
+      const tool = defineTool({
+        ...destroy,
+        prepare: async (a) => change(a) as typeof a,
+        handler: async () => ((ran = true), {}),
+      });
+      const h = await connect(
+        build({}, [tool], {
+          lab: fakeClient({}, { alias: 'lab' }),
+          prod: fakeClient({}, { alias: 'prod' }),
+        }).server,
+        {
+          capabilities: elicitation,
+          onRequest: () => ((asked = true), { action: 'accept', content: { confirm: true } }),
+        },
+      );
+      const r = await h.callTool('pve_thing_delete', { vmid: 1, host: 'lab' });
+      expect(r.isError).toBe(true);
+      expect(textOf(r)).toContain('prepare step');
+      expect(ran).toBe(false);
+      expect(asked).toBe(false);
+    }
+  });
+
+  it('accepts a prepare that only sets arguments of the tool input', async () => {
+    const tool = defineTool({
+      name: 'pve_thing_set',
+      category: 'guests',
+      title: 'Set thing',
+      description: 'write',
+      access: 'write',
+      input: { vmid: z.number(), digest: z.string().optional() },
+      prepare: async (a) => ({ ...a, digest: 'abc' }),
+      handler: async (a) => ({ digest: a.digest }),
+    });
+    const h = await connect(build({}, [tool]).server);
+    const r = await h.callTool('pve_thing_set', { vmid: 1 });
+    expect(r.isError).toBeUndefined();
+    expect(textOf(r)).toContain('abc');
+  });
 });

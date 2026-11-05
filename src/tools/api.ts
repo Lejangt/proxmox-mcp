@@ -222,13 +222,33 @@ export function urlFetchProblem(path: string, params: Params | undefined): strin
   );
 }
 
-/** Parameter values that look like credentials are hidden in the confirmation question. */
-const SECRET_PARAM = /pass|secret|token|key|cred/i;
+/**
+ * Parameters of the Proxmox API that carry a password or secret, taken from
+ * the API schema (pve-docs api-viewer apidoc.js): parameters named like a
+ * credential whose description names a password, secret, token or private
+ * key. Only these exact names are hidden in the confirmation question. A
+ * pattern on the name would also hide parameters that change what the call
+ * does (lock-token of the SDN calls, tokenid of the token removal), so every
+ * other parameter is shown in full.
+ */
+export const SECRET_PARAMS: ReadonlySet<string> = new Set([
+  'password',
+  'confirmation-password',
+  'cipassword',
+  'secret',
+  'token',
+  'eab-hmac-key',
+  'encryption-key',
+  'keyring',
+  'client-key',
+]);
 
-function paramsForDisplay(params: Record<string, unknown> | undefined): Record<string, unknown> {
+export function paramsForDisplay(
+  params: Record<string, unknown> | undefined,
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(params ?? {})) {
-    out[key] = SECRET_PARAM.test(key) ? '***' : value;
+    out[key] = SECRET_PARAMS.has(key) ? '***' : value;
   }
   return out;
 }

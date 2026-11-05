@@ -281,6 +281,30 @@ describe('confirmation targets', () => {
     ).toBe('DELETE "/access/users/bob@pve" with {"password":"***","comment":"x"}');
   });
 
+  it('hides only known secret parameters, a credential-like name that steers the call stays visible', async () => {
+    expect(
+      await targetOf(
+        'pve_api_request',
+        {
+          method: 'DELETE',
+          path: '/cluster/sdn/vnets/v1',
+          params: {
+            'lock-token': 'abc',
+            tokenid: 'ci',
+            keep: 1,
+            'confirmation-password': 'pw',
+            'client-key': 'k',
+            Password: 'P',
+          },
+        },
+        fakeClient(),
+      ),
+    ).toBe(
+      'DELETE "/cluster/sdn/vnets/v1" with {"lock-token":"abc","tokenid":"ci","keep":1,' +
+        '"confirmation-password":"***","client-key":"***","Password":"P"}',
+    );
+  });
+
   it('names the node of a service action even when node is omitted', async () => {
     const c = fakeClient({ 'GET /nodes': [{ node: 'pve1' }] } as never);
     expect(

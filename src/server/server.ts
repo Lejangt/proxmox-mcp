@@ -129,6 +129,35 @@ async function confirmTargetOf(
   }
 }
 
+/**
+ * Validates what a tool's prepare returned against the tool input, host
+ * included, with unknown keys refused. prepare only pins values into the
+ * tool's own arguments, so anything else (a key outside the input, a value
+ * the schema rejects, another host than the one the client was resolved for)
+ * is a programming error, and the call fails before confirmation and handler.
+ */
+function checkPrepared(
+  tool: string,
+  schema: z.ZodType,
+  args: Record<string, unknown> & { host?: string },
+  prepared: unknown,
+): Parameters<AnyToolDef['handler']>[0] {
+  const result = schema.safeParse(prepared);
+  if (!result.success) {
+    const fields = result.error.issues.map((issue) =>
+      issue.code === 'unrecognized_keys' ? issue.keys.join(', ') : issue.path.join('.'),
+    );
+    throw new Error(
+      `${tool} was not run: its prepare step returned arguments outside the tool input (${printableAscii(fields.join(', '))})`,
+    );
+  }
+  const data = result.data as Parameters<AnyToolDef['handler']>[0];
+  if (data.host !== args.host) {
+    throw new Error(`${tool} was not run: its prepare step changed the host`);
+  }
+  return data;
+}
+
 export function createServer(options: CreateServerOptions): McpServer {
   const { settings, hosts, log } = options;
   const binder = createConfirmBinder();
@@ -140,7 +169,10 @@ export function createServer(options: CreateServerOptions): McpServer {
   const active = selectTools(options.tools, settings, hosts);
 
   for (const def of active) {
-    const inputSchema = z.object(def.local ? { ...def.input } : { ...def.input, host });
+    const shape = def.local ? { ...def.input } : { ...def.input, host };
+    const inputSchema = z.object(shape);
+    // The SDK strips unknown keys from the caller's arguments, prepare output must not carry any.
+    const preparedSchema = z.strictObject(shape);
     server.registerTool(
       def.name,
       {
@@ -168,7 +200,12 @@ export function createServer(options: CreateServerOptions): McpServer {
           };
           // Everything below, the binding of a confirmation included, uses the prepared arguments.
           const toolArgs = def.prepare
-            ? await def.prepare(args as Parameters<AnyToolDef['handler']>[0], toolCtx)
+            ? checkPrepared(
+                def.name,
+                preparedSchema,
+                args,
+                await def.prepare(args as Parameters<AnyToolDef['handler']>[0], toolCtx),
+              )
             : (args as Parameters<AnyToolDef['handler']>[0]);
           if (
             def.access === 'destructive' ||

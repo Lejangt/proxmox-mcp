@@ -147,8 +147,11 @@ character, because Proxmox splits a list only at NUL once one is present.
 
 The question names the concrete target: VMID with name and node, node,
 command line, volume id, snapshot, storage, job id, method with path and
-parameters (values of credential-like parameters hidden), firewall level and
-rule, and for `pve_vm_agent_exec` the argv and the stdin data. Values are
+parameters (values of a fixed list of Proxmox password and secret parameters
+hidden: `password`, `confirmation-password`, `cipassword`, `secret`, `token`,
+`eab-hmac-key`, `encryption-key`, `keyring`, `client-key`, every other
+parameter shown in full, so a name like `lock-token` cannot hide a value that
+steers the call), firewall level and rule, and for `pve_vm_agent_exec` the argv and the stdin data. Values are
 quoted and every character outside printable ASCII is shown as `\uXXXX`
 (including line and paragraph separators, NEL and bidirectional controls),
 so text in a name or argument cannot add lines to the question or reorder
@@ -177,7 +180,10 @@ and is read again when the answer arrives, so a rule added while the user
 was asked makes the confirmation fail instead of changing whatever rule
 moved to the position. The question only shows a rule read from the same
 version of the list, otherwise the call is refused. When the rule cannot be
-read, the change is sent without digest as before.
+read, the change is sent without digest as before. What a tool's `prepare`
+step returns is checked against the tool input again, with unknown arguments
+refused and the host unchanged, and a call that fails this check is not
+asked for and not run.
 A declined, unanswered or refused confirmation means nothing is sent to
 Proxmox.
 

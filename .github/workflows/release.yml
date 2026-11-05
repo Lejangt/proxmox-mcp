@@ -41,7 +41,10 @@ jobs:
             echo "::error::Tag $TAG does not match package.json version v$version"
             exit 1
           fi
-      - run: npm ci
+      # No install scripts: they would run dependency code in the job that
+      # builds the published tarball. Only esbuild (dev only, its binary comes
+      # from an optional platform package) and fsevents (macOS) declare one.
+      - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test

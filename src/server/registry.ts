@@ -147,7 +147,9 @@ export interface ToolDef<Shape extends z.ZodRawShape = z.ZodRawShape> {
    * question, so a pinned value that changed in between no longer matches
    * the confirmed call and the call is refused. It may read from Proxmox
    * through ctx but must not change anything, and may only set arguments of
-   * the tool's own input.
+   * the tool's own input. The framework checks the result against the input
+   * schema with unknown keys refused and the host unchanged, and fails the
+   * call without confirmation or handler when it does not pass.
    */
   prepare?(
     args: z.infer<z.ZodObject<Shape>> & { host?: string },

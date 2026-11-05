@@ -64,15 +64,26 @@ Releases go to npm through [.github/workflows/release.yml](.github/workflows/rel
    git push origin vX.Y.Z
    ```
 
-The workflow starts on the tag. The `verify` job fails when the tag is not exactly `v` plus the version in `package.json`. It then runs `npm ci`, lint, typecheck, tests, build and `npm run generate -- --check`, and packs the tarball. The `publish` job runs in the environment `npm`, is the only job with `id-token: write`, and publishes that tarball without running any project code. Source maps are not part of the package (`!dist/**/*.map` in `files`). Check the contents with `npm pack --dry-run`.
+The workflow starts on the tag. The `verify` job fails when the tag is not exactly `v` plus the version in `package.json`. It then runs `npm ci --ignore-scripts` (no dependency install scripts in the job that builds the tarball), lint, typecheck, tests, build and `npm run generate -- --check`, and packs the tarball. The `publish` job runs in the environment `npm`, is the only job with `id-token: write`, and publishes that tarball without running any project code. Source maps are not part of the package (`!dist/**/*.map` in `files`). Check the contents with `npm pack --dry-run`.
 
 ### One time setup
 
+Set up the GitHub side first, so that the environment the trusted publisher names already exists and is restricted when the publisher is added.
+
+1. In the GitHub repository settings, open Environments, create the environment `npm` and restrict deployments to tags matching `v*`. Add required reviewers if the plan of the repository supports them. Without this step the workflow would create an unrestricted environment `npm` on its first run.
+2. In the GitHub repository settings, open Rules, Rulesets, and add a tag ruleset:
+   - Enforcement status: Active
+   - Target tags: include by pattern `v*`
+   - Rules: Restrict creations, Restrict updates, Restrict deletions and Block force pushes
+   - Bypass list: the role Repository admin, nobody else
+
+   Only admins can then create a release tag, and no one can move or delete one. Rulesets need a public repository or a paid plan.
+
 npm can only attach a trusted publisher to a package that already exists in the registry (see [npm trust](https://docs.npmjs.com/cli/v11/commands/npm-trust)). The first version is therefore published by hand:
 
-1. Log in with an npm account that has two factor authentication enabled: `npm login`.
-2. In a clean checkout of the release commit, run `npm ci`, then `npm publish --access public`. `prepublishOnly` runs lint, typecheck, tests, a clean build and `npm run generate -- --check` first.
-3. On npmjs.com, open the package, then Settings, Trusted publishing, and add a GitHub Actions publisher:
+3. Log in with an npm account that has two factor authentication enabled: `npm login`.
+4. In a clean checkout of the release commit, run `npm ci --ignore-scripts`, then `npm publish --access public`. `prepublishOnly` runs lint, typecheck, tests, a clean build and `npm run generate -- --check` first.
+5. On npmjs.com, open the package, then Settings, Trusted publishing, and add a GitHub Actions publisher:
    - Organization or user: `Lejangt`
    - Repository: `proxmox-mcp`
    - Workflow filename: `release.yml`
@@ -80,8 +91,7 @@ npm can only attach a trusted publisher to a package that already exists in the 
 
    All fields are case sensitive. A new trusted publisher expires when no publish succeeds with it within 2 days, so publish the next version soon after adding it, or delete and recreate it later.
 
-4. In the package settings under Publishing access, choose "Require two-factor authentication and disallow tokens". Trusted publishing keeps working, publishing with tokens stops.
-5. In the GitHub repository settings, open Environments, `npm` and restrict deployments to tags matching `v*`. Add required reviewers if the plan of the repository supports them. The workflow creates the environment on its first run if it does not exist yet.
+6. In the package settings under Publishing access, choose "Require two-factor authentication and disallow tokens". Trusted publishing keeps working, publishing with tokens stops.
 
 npm attaches provenance attestations automatically with trusted publishing, but only for public packages published from a public repository. While the repository is private, releases are published without provenance. No `--provenance` flag is needed once it is public.
 
