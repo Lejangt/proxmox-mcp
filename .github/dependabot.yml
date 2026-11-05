@@ -2,6 +2,7 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
+    target-branch: dev
     schedule:
       interval: weekly
     groups:
@@ -9,7 +10,16 @@ updates:
         dependency-type: development
       production-dependencies:
         dependency-type: production
+    ignore:
+      # typescript-eslint 8.x accepts TypeScript >=4.8.4 <6.1.0 only. Remove
+      # this entry once a typescript-eslint release supports newer versions.
+      - dependency-name: typescript
+        versions: ['>= 6.1.0']
+      # The types must match the oldest supported Node.js (engines: >=22).
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
+    target-branch: dev
     schedule:
       interval: weekly
