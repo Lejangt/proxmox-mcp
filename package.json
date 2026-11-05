@@ -1,0 +1,69 @@
+{
+  "name": "proxmox-ve-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Proxmox VE: manage VMs, containers, storage, backups and more through the Proxmox API with API tokens.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lejangt/proxmox-mcp.git"
+  },
+  "homepage": "https://github.com/Lejangt/proxmox-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/Lejangt/proxmox-mcp/issues"
+  },
+  "type": "module",
+  "bin": {
+    "proxmox-ve-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "config.schema.json"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "proxmox",
+    "proxmox-ve",
+    "pve",
+    "virtualization",
+    "lxc",
+    "qemu"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "generate": "tsx scripts/generate.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.8.1",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "picocolors": "^1.1.1",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "optionalDependencies": {
+    "@napi-rs/keyring": "^2.1.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
+    "eslint": "^10.14.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.4"
+  }
+}

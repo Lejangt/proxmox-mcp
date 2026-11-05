@@ -1,0 +1,1177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "readOnly": {
+      "default": false,
+      "type": "boolean"
+    },
+    "confirmDestructive": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "always",
+        "never"
+      ]
+    },
+    "defaultHost": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
+    },
+    "hosts": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "url": {
+            "type": "string"
+          },
+          "tokenId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._+~-]{1,64}@[A-Za-z][A-Za-z0-9._-]{0,31}![A-Za-z][A-Za-z0-9._-]{0,63}$"
+          },
+          "tokenSecret": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "env"
+                  },
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+                  }
+                },
+                "required": [
+                  "source",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "file"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "source",
+                  "path"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "keyring"
+                  },
+                  "service": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "account": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "source"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "bws"
+                  },
+                  "secretId": {
+                    "type": "string",
+                    "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                  },
+                  "accessToken": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "env"
+                          },
+                          "name": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "file"
+                          },
+                          "path": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "path"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "keyring"
+                          },
+                          "service": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "account": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "account"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "1password"
+                          },
+                          "ref": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2048
+                          },
+                          "account": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "binary": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Executable name (looked up in PATH) or absolute path of the CLI."
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "pass"
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          },
+                          "binary": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Executable name (looked up in PATH) or absolute path of the CLI."
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "command"
+                          },
+                          "command": {
+                            "minItems": 1,
+                            "maxItems": 64,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 4096
+                            }
+                          },
+                          "timeoutSeconds": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 300
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "command"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "serverUrl": {
+                    "type": "string"
+                  },
+                  "binary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Executable name (looked up in PATH) or absolute path of the CLI."
+                  }
+                },
+                "required": [
+                  "source",
+                  "secretId"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "1password"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  },
+                  "account": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "binary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Executable name (looked up in PATH) or absolute path of the CLI."
+                  }
+                },
+                "required": [
+                  "source",
+                  "ref"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "vault"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "field": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "mount": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "env"
+                          },
+                          "name": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "file"
+                          },
+                          "path": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "path"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "keyring"
+                          },
+                          "service": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "account": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "account"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "1password"
+                          },
+                          "ref": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2048
+                          },
+                          "account": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "binary": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Executable name (looked up in PATH) or absolute path of the CLI."
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "pass"
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          },
+                          "binary": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Executable name (looked up in PATH) or absolute path of the CLI."
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "const": "command"
+                          },
+                          "command": {
+                            "minItems": 1,
+                            "maxItems": 64,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 4096
+                            }
+                          },
+                          "timeoutSeconds": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 300
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "command"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "namespace": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "binary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Executable name (looked up in PATH) or absolute path of the CLI."
+                  }
+                },
+                "required": [
+                  "source",
+                  "path",
+                  "field"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "pass"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "binary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Executable name (looked up in PATH) or absolute path of the CLI."
+                  }
+                },
+                "required": [
+                  "source",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "command"
+                  },
+                  "command": {
+                    "minItems": 1,
+                    "maxItems": 64,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 4096
+                    }
+                  },
+                  "timeoutSeconds": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 300
+                  }
+                },
+                "required": [
+                  "source",
+                  "command"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "tls": {
+            "default": {},
+            "type": "object",
+            "properties": {
+              "verify": {
+                "default": true,
+                "type": "boolean"
+              },
+              "caFile": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "fingerprint": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "readOnly": {
+            "default": false,
+            "type": "boolean"
+          },
+          "timeoutSeconds": {
+            "default": 30,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3600
+          }
+        },
+        "required": [
+          "url",
+          "tokenId",
+          "tokenSecret"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "limits": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "maxOutputChars": {
+          "default": 60000,
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 10000000
+        },
+        "taskWaitSeconds": {
+          "default": 600,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400
+        }
+      },
+      "additionalProperties": false
+    },
+    "categories": {
+      "default": {},
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "core": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_hosts_list": {
+                  "type": "boolean",
+                  "description": "[R] List Proxmox hosts"
+                },
+                "pve_version": {
+                  "type": "boolean",
+                  "description": "[R] Proxmox version"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Core: Configured Proxmox targets and the Proxmox version of a host."
+        },
+        "cluster": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_cluster_status": {
+                  "type": "boolean",
+                  "description": "[R] Cluster status"
+                },
+                "pve_cluster_resources": {
+                  "type": "boolean",
+                  "description": "[R] Cluster resources"
+                },
+                "pve_next_vmid": {
+                  "type": "boolean",
+                  "description": "[R] Next free VMID"
+                },
+                "pve_cluster_log": {
+                  "type": "boolean",
+                  "description": "[R] Cluster log"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Cluster: Cluster membership, resources, free VMIDs and the cluster log."
+        },
+        "nodes": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_node_list": {
+                  "type": "boolean",
+                  "description": "[R] List nodes"
+                },
+                "pve_node_status": {
+                  "type": "boolean",
+                  "description": "[R] Node status"
+                },
+                "pve_node_rrd": {
+                  "type": "boolean",
+                  "description": "[R] Node metrics"
+                },
+                "pve_node_services": {
+                  "type": "boolean",
+                  "description": "[R] Node services"
+                },
+                "pve_node_service_action": {
+                  "type": "boolean",
+                  "description": "[W] Node service action"
+                },
+                "pve_node_syslog": {
+                  "type": "boolean",
+                  "description": "[R] Node journal"
+                },
+                "pve_node_disks": {
+                  "type": "boolean",
+                  "description": "[R] Node disks"
+                },
+                "pve_node_apt_updates": {
+                  "type": "boolean",
+                  "description": "[R] Pending package updates"
+                },
+                "pve_node_power": {
+                  "type": "boolean",
+                  "description": "[D] Reboot or shut down node"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Nodes: Node status, metrics, services, logs, disks, updates and power control."
+        },
+        "network": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_network_list": {
+                  "type": "boolean",
+                  "description": "[R] List network interfaces"
+                },
+                "pve_network_set": {
+                  "type": "boolean",
+                  "description": "[W] Create or update network interface"
+                },
+                "pve_network_delete": {
+                  "type": "boolean",
+                  "description": "[W] Delete network interface"
+                },
+                "pve_network_apply": {
+                  "type": "boolean",
+                  "description": "[D] Apply network changes"
+                },
+                "pve_network_revert": {
+                  "type": "boolean",
+                  "description": "[W] Revert staged network changes"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Network: Node network interfaces with staged changes that are applied explicitly."
+        },
+        "guests": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_guest_list": {
+                  "type": "boolean",
+                  "description": "[R] List guests"
+                },
+                "pve_guest_status": {
+                  "type": "boolean",
+                  "description": "[R] Guest status"
+                },
+                "pve_guest_config": {
+                  "type": "boolean",
+                  "description": "[R] Guest configuration"
+                },
+                "pve_guest_rrd": {
+                  "type": "boolean",
+                  "description": "[R] Guest metrics"
+                },
+                "pve_guest_power": {
+                  "type": "boolean",
+                  "description": "[W] Guest power action"
+                },
+                "pve_guest_update_config": {
+                  "type": "boolean",
+                  "description": "[W] Update guest configuration"
+                },
+                "pve_guest_resize_disk": {
+                  "type": "boolean",
+                  "description": "[W] Resize guest disk"
+                },
+                "pve_guest_move_disk": {
+                  "type": "boolean",
+                  "description": "[W] Move guest disk"
+                },
+                "pve_guest_migrate": {
+                  "type": "boolean",
+                  "description": "[W] Migrate guest"
+                },
+                "pve_guest_clone": {
+                  "type": "boolean",
+                  "description": "[W] Clone guest"
+                },
+                "pve_guest_template": {
+                  "type": "boolean",
+                  "description": "[W] Convert guest to template"
+                },
+                "pve_guest_delete": {
+                  "type": "boolean",
+                  "description": "[D] Delete guest"
+                },
+                "pve_vm_create": {
+                  "type": "boolean",
+                  "description": "[W] Create VM"
+                },
+                "pve_lxc_create": {
+                  "type": "boolean",
+                  "description": "[W] Create container"
+                },
+                "pve_vm_agent_info": {
+                  "type": "boolean",
+                  "description": "[R] VM guest agent info"
+                },
+                "pve_vm_agent_exec": {
+                  "type": "boolean",
+                  "description": "[D] Run command in VM"
+                },
+                "pve_vm_cloudinit": {
+                  "type": "boolean",
+                  "description": "[R] VM cloud-init"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Guests: Create, inspect, configure, power, move and delete VMs and containers."
+        },
+        "snapshots": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_snapshot_list": {
+                  "type": "boolean",
+                  "description": "[R] List snapshots"
+                },
+                "pve_snapshot_create": {
+                  "type": "boolean",
+                  "description": "[W] Create snapshot"
+                },
+                "pve_snapshot_rollback": {
+                  "type": "boolean",
+                  "description": "[D] Roll back to snapshot"
+                },
+                "pve_snapshot_delete": {
+                  "type": "boolean",
+                  "description": "[D] Delete snapshot"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Snapshots: List, create, roll back and delete guest snapshots."
+        },
+        "storage": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_storage_list": {
+                  "type": "boolean",
+                  "description": "[R] List storages"
+                },
+                "pve_storage_content": {
+                  "type": "boolean",
+                  "description": "[R] Storage content"
+                },
+                "pve_storage_download_url": {
+                  "type": "boolean",
+                  "description": "[W] Download file from URL to storage"
+                },
+                "pve_storage_templates": {
+                  "type": "boolean",
+                  "description": "[R] Available container templates"
+                },
+                "pve_storage_template_download": {
+                  "type": "boolean",
+                  "description": "[W] Download container template"
+                },
+                "pve_storage_volume_delete": {
+                  "type": "boolean",
+                  "description": "[D] Delete volume"
+                },
+                "pve_storage_define": {
+                  "type": "boolean",
+                  "description": "[W] Create or update storage"
+                },
+                "pve_storage_remove": {
+                  "type": "boolean",
+                  "description": "[D] Remove storage definition"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Storage: Storage definitions, volumes, ISO images and container templates."
+        },
+        "backup": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_backup_list": {
+                  "type": "boolean",
+                  "description": "[R] List backups"
+                },
+                "pve_backup_create": {
+                  "type": "boolean",
+                  "description": "[W] Back up guests now"
+                },
+                "pve_backup_restore": {
+                  "type": "boolean",
+                  "description": "[D] Restore backup"
+                },
+                "pve_backup_jobs_list": {
+                  "type": "boolean",
+                  "description": "[R] List backup jobs"
+                },
+                "pve_backup_job_set": {
+                  "type": "boolean",
+                  "description": "[W] Create or update backup job"
+                },
+                "pve_backup_job_delete": {
+                  "type": "boolean",
+                  "description": "[D] Delete backup job"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Backup: Backups, restores and scheduled backup jobs."
+        },
+        "tasks": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_task_list": {
+                  "type": "boolean",
+                  "description": "[R] List tasks"
+                },
+                "pve_task_status": {
+                  "type": "boolean",
+                  "description": "[R] Task status"
+                },
+                "pve_task_log": {
+                  "type": "boolean",
+                  "description": "[R] Task log"
+                },
+                "pve_task_wait": {
+                  "type": "boolean",
+                  "description": "[R] Wait for task"
+                },
+                "pve_task_stop": {
+                  "type": "boolean",
+                  "description": "[W] Stop task"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Tasks: Inspect, wait for and stop Proxmox tasks."
+        },
+        "access": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_access_list": {
+                  "type": "boolean",
+                  "description": "[R] List access objects"
+                },
+                "pve_access_permissions": {
+                  "type": "boolean",
+                  "description": "[R] Effective permissions"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Access: Users, groups, roles, ACLs, realms, API tokens and effective permissions."
+        },
+        "firewall": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_firewall_rules": {
+                  "type": "boolean",
+                  "description": "[R] List firewall rules"
+                },
+                "pve_firewall_rule_add": {
+                  "type": "boolean",
+                  "description": "[W] Add firewall rule"
+                },
+                "pve_firewall_rule_update": {
+                  "type": "boolean",
+                  "description": "[W] Update firewall rule"
+                },
+                "pve_firewall_rule_delete": {
+                  "type": "boolean",
+                  "description": "[D] Delete firewall rule"
+                },
+                "pve_firewall_options": {
+                  "type": "boolean",
+                  "description": "[R] Firewall options"
+                },
+                "pve_firewall_options_set": {
+                  "type": "boolean",
+                  "description": "[W] Change firewall options"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Firewall: Firewall rules and options at cluster, node and guest level."
+        },
+        "pools": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_pool_list": {
+                  "type": "boolean",
+                  "description": "[R] List resource pools"
+                },
+                "pve_pool_set": {
+                  "type": "boolean",
+                  "description": "[W] Create or change a pool"
+                },
+                "pve_pool_delete": {
+                  "type": "boolean",
+                  "description": "[D] Delete a pool"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Pools: Resource pools and their members."
+        },
+        "ha": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_ha_status": {
+                  "type": "boolean",
+                  "description": "[R] HA status"
+                },
+                "pve_ha_resource_set": {
+                  "type": "boolean",
+                  "description": "[W] Add or change an HA resource"
+                },
+                "pve_ha_resource_remove": {
+                  "type": "boolean",
+                  "description": "[D] Remove an HA resource"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "High availability: HA manager status and HA resources."
+        },
+        "api": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "pve_api_get": {
+                  "type": "boolean",
+                  "description": "[R] Proxmox API GET"
+                },
+                "pve_api_request": {
+                  "type": "boolean",
+                  "description": "[W] Proxmox API write request"
+                },
+                "pve_api_describe": {
+                  "type": "boolean",
+                  "description": "[R] Describe Proxmox API path"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Raw API: Escape hatch for any Proxmox API path without a dedicated tool."
+        }
+      }
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "additionalProperties": false,
+  "title": "proxmox-ve-mcp settings"
+}
