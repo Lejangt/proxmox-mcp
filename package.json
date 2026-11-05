@@ -1,6 +1,6 @@
 {
   "name": "proxmox-ve-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server for Proxmox VE: manage VMs, containers, storage, backups and more through the Proxmox API with API tokens.",
   "license": "MIT",
   "repository": {
