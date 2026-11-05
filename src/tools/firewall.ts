@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { guestPath, resolveGuest } from '../proxmox/guests.js';
 import { pvePath } from '../proxmox/path.js';
+import { ConfirmRefusal } from '../server/confirm.js';
 import { defineTool, type AnyToolDef, type ToolContext } from '../server/registry.js';
 import { guestTypeSchema, nodeSchema, vmidSchema } from './common.js';
 import { defaultNode, mergeOptions, splitList } from './resolve-node.js';
@@ -100,9 +101,9 @@ export function ruleSummary(rule: Row): string {
   for (const key of RULE_SUMMARY_FIELDS) {
     const value = rule[key];
     if (value === undefined || value === null || value === '') continue;
-    if (key === 'type' || key === 'action') parts.push(quote(String(value), 64));
+    if (key === 'type' || key === 'action') parts.push(quote(String(value)));
     else if (key === 'enable') parts.push(value === 0 || value === false ? 'disabled' : 'enabled');
-    else parts.push(`${key} ${quote(String(value), 100)}`);
+    else parts.push(`${key} ${quote(String(value))}`);
   }
   return parts.join(' ');
 }
@@ -156,8 +157,75 @@ function mayAccept(rule: Row): boolean {
   return typeof rule.action === 'string' && rule.action.toUpperCase() === 'ACCEPT';
 }
 
+interface RuleAt extends ScopeArgs {
+  pos: number;
+  digest?: string | undefined;
+}
+
+/** Digest as Proxmox returns it with every rule: SHA1 hex over the rule list. */
+const DIGEST = /^[A-Fa-f0-9]{40,128}$/;
+
+/** The rule at `pos` with the digest of its rule list, undefined when Proxmox answers no object. */
+async function readRule(ctx: ToolContext, args: RuleAt): Promise<Row | undefined> {
+  const base = await firewallBase(ctx, args);
+  const row = await ctx.client.get<Row>(base + pvePath`/rules/${args.pos}`);
+  return row !== null && typeof row === 'object' && !Array.isArray(row) ? row : undefined;
+}
+
+/** True when a digest is pinned and the rule was read from another version of the rule list. */
+function readOtherVersion(args: RuleAt, row: Row): boolean {
+  return args.digest !== undefined && row.digest !== args.digest;
+}
+
+/**
+ * prepare of pve_firewall_rule_update and _delete. Positions shift when a
+ * rule is added, moved or deleted, so a change confirmed for the rule shown
+ * at `pos` could hit another rule that moved there meanwhile. Without a
+ * digest from the caller, the digest of the current rule list is read and
+ * sent with the change, and Proxmox refuses it when the list differs. The
+ * digest is one of the arguments, so the confirmation binding covers it:
+ * prepare runs again in the call that carries the answer, and a list that
+ * changed while the user was asked gives another digest and the answer no
+ * longer matches. The question shows the rule only when it was read from
+ * the same version (see confirmTarget). When the rule cannot be read, the
+ * arguments stay as they are, Proxmox then reports the missing rule.
+ */
+export async function pinRuleDigest<A extends RuleAt>(args: A, ctx: ToolContext): Promise<A> {
+  if (args.digest !== undefined) return args;
+  let row: Row | undefined;
+  try {
+    row = await readRule(ctx, args);
+  } catch {
+    return args;
+  }
+  const digest = row?.digest;
+  return typeof digest === 'string' && DIGEST.test(digest) ? { ...args, digest } : args;
+}
+
+/**
+ * The rule at `pos` for a confirmation question, undefined when it cannot be
+ * read. A rule read from another version of the rule list than the pinned
+ * digest would show something else than the call changes, so that refuses.
+ */
+async function ruleForQuestion(ctx: ToolContext, args: RuleAt): Promise<Row | undefined> {
+  let row: Row | undefined;
+  try {
+    row = await readRule(ctx, args);
+  } catch {
+    return undefined;
+  }
+  if (row !== undefined && readOtherVersion(args, row)) {
+    throw new ConfirmRefusal(
+      'The firewall rules changed since they were read (the digest differs). Nothing was changed. ' +
+        'Read the rules again with pve_firewall_rules and call the tool with the current position.',
+    );
+  }
+  return row;
+}
+
 interface RuleUpdateArgs extends ScopeArgs {
   pos: number;
+  digest?: string | undefined;
   moveto?: number | undefined;
   delete?: string[] | undefined;
   action?: string | undefined;
@@ -172,7 +240,8 @@ interface RuleUpdateArgs extends ScopeArgs {
  * grants. It asks when the update changes a filtering field (or moves the
  * rule) and the rule is active and may block afterwards, or was an active
  * rule that may accept before. Comment or log changes never ask. When the
- * rule cannot be read it asks.
+ * rule cannot be read, or was read from another version of the rule list
+ * than the pinned digest, it asks.
  */
 export async function ruleUpdateNeedsConfirmation(
   args: RuleUpdateArgs,
@@ -183,9 +252,9 @@ export async function ruleUpdateNeedsConfirmation(
   const deleted = new Set(splitList(args.delete, 'delete'));
   let before: Row;
   try {
-    const base = await firewallBase(ctx, args);
-    const row = await ctx.client.get<Row>(base + pvePath`/rules/${args.pos}`);
-    if (row === null || typeof row !== 'object' || Array.isArray(row)) return true;
+    const row = await readRule(ctx, args);
+    // A rule from another version of the list than the pinned one is not the rule that changes.
+    if (row === undefined || readOtherVersion(args, row)) return true;
     before = row;
   } catch {
     return true;
@@ -208,6 +277,10 @@ export async function ruleUpdateNeedsConfirmation(
 const POS_HINT =
   'Rule positions start at 0 and shift when a rule is added, moved or deleted, so read the rules ' +
   'right before changing one and pass the digest from that read to detect concurrent edits.';
+
+const PIN_HINT =
+  'Without digest the digest of the current rules is read and sent, so Proxmox refuses the change if ' +
+  'the rules change before it runs, also while the user is asked.';
 
 const posSchema = z.number().int().min(0).max(10000).describe('Rule position, starting at 0');
 
@@ -360,7 +433,9 @@ const firewallRuleUpdate = defineTool({
     'is asked first when the rule is active and can drop traffic after the change (DROP, REJECT or a ' +
     'security group) or when an active ACCEPT or group rule is disabled, moved or changed in a ' +
     'filtering field. Comment and log changes do not ask. ' +
-    POS_HINT,
+    POS_HINT +
+    ' ' +
+    PIN_HINT,
   access: 'write',
   input: {
     ...scopeInput,
@@ -376,16 +451,11 @@ const firewallRuleUpdate = defineTool({
       .describe('Fields to remove from the rule'),
     digest: digestSchema,
   },
+  prepare: pinRuleDigest,
   needsConfirmation: (args, ctx) => ruleUpdateNeedsConfirmation(args, ctx),
   confirmTarget: async (args, ctx) => {
-    let current = '';
-    try {
-      const base = await firewallBase(ctx, args);
-      const row = await ctx.client.get<Row>(base + pvePath`/rules/${args.pos}`);
-      if (row && typeof row === 'object') current = ` (now ${ruleSummary(row)})`;
-    } catch {
-      current = '';
-    }
+    const row = await ruleForQuestion(ctx, args);
+    const current = row ? ` (now ${ruleSummary(row)})` : '';
     const cleared = args.delete?.length ? `, clear ${args.delete.join(', ')}` : '';
     const change =
       args.moveto !== undefined
@@ -425,18 +495,15 @@ const firewallRuleDelete = defineTool({
     'Delete the rule at a position. Rules after it move up by one, so delete several rules from the ' +
     'highest position down, or read the rules again between calls. Removing an ACCEPT rule can cut off ' +
     'access. ' +
-    POS_HINT,
+    POS_HINT +
+    ' ' +
+    PIN_HINT,
   access: 'destructive',
   input: { ...scopeInput, pos: posSchema, digest: digestSchema },
+  prepare: pinRuleDigest,
   confirmTarget: async (args, ctx) => {
-    let rule = '';
-    try {
-      const base = await firewallBase(ctx, args);
-      const row = await ctx.client.get<Row>(base + pvePath`/rules/${args.pos}`);
-      if (row && typeof row === 'object') rule = ` (${ruleSummary(row)})`;
-    } catch {
-      rule = '';
-    }
+    const row = await ruleForQuestion(ctx, args);
+    const rule = row ? ` (${ruleSummary(row)})` : '';
     return `delete firewall rule ${args.pos}${rule} on ${await scopeTarget(ctx, args)}`;
   },
   handler: async (args, ctx) => {

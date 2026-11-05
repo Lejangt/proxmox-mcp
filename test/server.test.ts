@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { Settings } from '../src/config/types.js';
 import { defineTool, type AnyToolDef } from '../src/server/registry.js';
 import { annotationsFor, createServer, selectTools } from '../src/server/server.js';
+import { ConfirmRefusal } from '../src/server/confirm.js';
 import { fakeClient } from './helpers/fake-client.js';
 import { fakeHosts, fakeSettings } from './helpers/fixtures.js';
 import { connect, textOf } from './helpers/mcp-harness.js';
@@ -400,5 +401,93 @@ describe('destructive confirmation', () => {
     const message = String(h.incoming[0]!.params.message);
     expect(message).toMatch(/^[\x20-\x7e]*$/);
     expect(message).toContain('a\\u2028b\\u202ec\\u0085d\\u2066e\\u200ff\\u00e9');
+  });
+
+  it('refuses instead of asking when the question would be too long, nothing is cut', async () => {
+    let ran = false;
+    const long = defineTool({
+      ...destroy,
+      confirmTarget: () => `${'x'.repeat(4000)} PAYLOAD ${'y'.repeat(2000)}`,
+      handler: async () => ((ran = true), {}),
+    });
+    const { server } = build({}, [long]);
+    const h = await connect(server, {
+      capabilities: elicitation,
+      onRequest: () => ({ action: 'accept', content: { confirm: true } }),
+    });
+    const r = await h.callTool('pve_thing_delete', { vmid: 1 });
+    expect(r.isError).toBe(true);
+    expect(textOf(r)).toContain('nothing is cut');
+    expect(h.incoming).toHaveLength(0);
+    expect(ran).toBe(false);
+  });
+
+  it('a ConfirmRefusal from confirmTarget refuses the call without asking', async () => {
+    let ran = false;
+    const refusing = defineTool({
+      ...destroy,
+      confirmTarget: () => {
+        throw new ConfirmRefusal('changed meanwhile');
+      },
+      handler: async () => ((ran = true), {}),
+    });
+    const { server } = build({}, [refusing]);
+    const h = await connect(server, { capabilities: elicitation });
+    const r = await h.callTool('pve_thing_delete', { vmid: 1 });
+    expect(r.isError).toBe(true);
+    expect(textOf(r)).toBe('changed meanwhile');
+    expect(h.incoming).toHaveLength(0);
+    expect(ran).toBe(false);
+  });
+
+  it('shows the full arguments when confirmTarget fails, a payload in the middle stays visible', async () => {
+    const failing = defineTool({
+      name: 'pve_thing_delete',
+      category: 'guests',
+      title: 'Delete thing',
+      description: 'destructive',
+      access: 'destructive',
+      handler: async () => ({}),
+      input: { vmid: z.number(), note: z.string() },
+      confirmTarget: () => {
+        throw new Error('lookup failed');
+      },
+    });
+    const { server } = build({}, [failing]);
+    const h = await connect(server, {
+      capabilities: elicitation,
+      onRequest: () => ({ action: 'decline' }),
+    });
+    const note = `${'a'.repeat(400)} PAYLOAD ${'b'.repeat(400)}`;
+    await h.callTool('pve_thing_delete', { vmid: 1, note });
+    const message = String(h.incoming[0]!.params.message);
+    expect(message).toContain(note);
+    expect(message).not.toMatch(/omitted/);
+  });
+
+  it('binds the confirmation to the prepared arguments and runs prepare again for the answer', async () => {
+    let version = 1;
+    const seen: unknown[] = [];
+    const pinned = defineTool({
+      ...destroy,
+      input: { vmid: z.number(), digest: z.string().optional() },
+      prepare: async (a) => (a.digest === undefined ? { ...a, digest: `v${version}` } : a),
+      handler: async (a) => (seen.push(a.digest), {}),
+    });
+    const accept = () => ({ action: 'accept', content: { confirm: true } });
+    const h = await connect(build({}, [pinned]).server, {
+      capabilities: elicitation,
+      onRequest: accept,
+    });
+    expect((await h.callTool('pve_thing_delete', { vmid: 1 })).isError).toBeUndefined();
+    expect(seen).toEqual(['v1']);
+    const raced = await connect(build({}, [pinned]).server, {
+      capabilities: elicitation,
+      onRequest: () => ((version = 2), accept()),
+    });
+    const r = await raced.callTool('pve_thing_delete', { vmid: 1 });
+    expect(r.isError).toBe(true);
+    expect(textOf(r)).toContain('different call');
+    expect(seen).toEqual(['v1']);
   });
 });

@@ -10,8 +10,8 @@ import type { Settings } from '../config/types.js';
 import type { HostRegistry, ProxmoxClient } from '../proxmox/types.js';
 import {
   capabilitiesOf,
+  ConfirmRefusal,
   createConfirmBinder,
-  cutMiddle,
   decideConfirmation,
   printableAscii,
 } from './confirm.js';
@@ -109,7 +109,9 @@ export function annotationsFor(def: AnyToolDef): ToolAnnotations {
 
 /**
  * The confirmation target of a call. A failing lookup must not block the
- * question, so the message then names the arguments instead.
+ * question, so the message then names the arguments instead, in full (a
+ * question that gets too long is refused, see MAX_TARGET_CHARS). A
+ * ConfirmRefusal from the tool is passed on.
  */
 async function confirmTargetOf(
   def: AnyToolDef,
@@ -119,10 +121,11 @@ async function confirmTargetOf(
   if (!def.confirmTarget) return undefined;
   try {
     return await def.confirmTarget(args, ctx);
-  } catch {
+  } catch (err) {
+    if (err instanceof ConfirmRefusal) throw err;
     const rest = { ...args } as Record<string, unknown>;
     delete rest.host;
-    return `arguments ${cutMiddle(printableAscii(JSON.stringify(rest)), 300)}`;
+    return `arguments ${printableAscii(JSON.stringify(rest))}`;
   }
 }
 
@@ -156,7 +159,6 @@ export function createServer(options: CreateServerOptions): McpServer {
             );
           }
 
-          const toolArgs = args as Parameters<AnyToolDef['handler']>[0];
           const toolCtx: ToolContext = {
             client,
             hosts,
@@ -164,12 +166,20 @@ export function createServer(options: CreateServerOptions): McpServer {
             signal: ctx.mcpReq.signal,
             log,
           };
+          // Everything below, the binding of a confirmation included, uses the prepared arguments.
+          const toolArgs = def.prepare
+            ? await def.prepare(args as Parameters<AnyToolDef['handler']>[0], toolCtx)
+            : (args as Parameters<AnyToolDef['handler']>[0]);
           if (
             def.access === 'destructive' ||
             (await def.needsConfirmation?.(toolArgs, toolCtx)) === true
           ) {
             const hostAlias = def.local ? 'local' : client.alias;
-            const binding = binder.binding(def.name, hostAlias, args);
+            const binding = binder.binding(
+              def.name,
+              hostAlias,
+              toolArgs as Record<string, unknown>,
+            );
             const request = {
               mode: settings.confirmDestructive,
               tool: def.name,
@@ -183,7 +193,13 @@ export function createServer(options: CreateServerOptions): McpServer {
             let decision = decideConfirmation(request);
             if (decision.kind === 'ask') {
               // The target may need Proxmox lookups, so it is only built for a question.
-              const target = await confirmTargetOf(def, toolArgs, toolCtx);
+              let target: string | undefined;
+              try {
+                target = await confirmTargetOf(def, toolArgs, toolCtx);
+              } catch (err) {
+                if (err instanceof ConfirmRefusal) return errorResult(err.message);
+                throw err;
+              }
               decision = decideConfirmation({ ...request, ...(target ? { target } : {}) });
             }
             if (decision.kind === 'ask') return decision.result;

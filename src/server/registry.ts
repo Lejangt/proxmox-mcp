@@ -138,6 +138,22 @@ export interface ToolDef<Shape extends z.ZodRawShape = z.ZodRawShape> {
   /** True for tools that make Proxmox download from an external URL (openWorldHint). */
   openWorld?: boolean;
   /**
+   * Runs before needsConfirmation, the confirmation and the handler, and
+   * returns the arguments all of them use. It pins state that a decision
+   * rests on into the arguments, so the confirmation binding covers it and
+   * the handler sends it (pve_firewall_rule_update and _delete fill in the
+   * digest of the rule list they read, so Proxmox refuses the change when
+   * the rules moved). It runs again in the call that carries the answer to a
+   * question, so a pinned value that changed in between no longer matches
+   * the confirmed call and the call is refused. It may read from Proxmox
+   * through ctx but must not change anything, and may only set arguments of
+   * the tool's own input.
+   */
+  prepare?(
+    args: z.infer<z.ZodObject<Shape>> & { host?: string },
+    ctx: ToolContext,
+  ): Promise<z.infer<z.ZodObject<Shape>> & { host?: string }>;
+  /**
    * For tools that are not `destructive` as a whole but are for some
    * arguments (pve_api_request with method DELETE). When this returns true the
    * framework asks for confirmation like for a destructive tool. Declaring it
@@ -158,7 +174,9 @@ export interface ToolDef<Shape extends z.ZodRawShape = z.ZodRawShape> {
    * and every tool with needsConfirmation (enforced by a test). It may read
    * from Proxmox through ctx (for example the guest name) but must not change
    * anything, and should fall back to the plain arguments when a lookup
-   * fails. Keep it free of secrets.
+   * fails. Values the call acts on are shown in full, never cut, a question
+   * longer than MAX_TARGET_CHARS is refused. Throw ConfirmRefusal to refuse
+   * the call instead of asking. Keep it free of secrets.
    */
   confirmTarget?(
     args: z.infer<z.ZodObject<Shape>> & { host?: string },

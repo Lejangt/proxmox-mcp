@@ -3,6 +3,7 @@ import { guestPath, resolveGuest, type GuestRef, type GuestType } from '../proxm
 import { pvePath } from '../proxmox/path.js';
 import { taskOutcome } from '../proxmox/tasks.js';
 import type { Params, ProxmoxClient } from '../proxmox/types.js';
+import { ConfirmRefusal } from '../server/confirm.js';
 import { defineTool, type AnyToolDef, type ToolContext } from '../server/registry.js';
 import {
   configValueSchema,
@@ -838,7 +839,7 @@ const lxcCreate = defineTool({
   handler: async (args, ctx) => {
     if (isBackupVolume(args.ostemplate)) {
       throw new Error(
-        `ostemplate ${quote(args.ostemplate)} is a backup archive, not a container template. ` +
+        `ostemplate ${quote(args.ostemplate, 200)} is a backup archive, not a container template. ` +
           'Restore backups with pve_backup_restore.',
       );
     }
@@ -956,6 +957,13 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 
 const EXEC_POLL_MS = 500;
 
+/**
+ * Most characters of argv plus stdin, after escaping, that the confirmation
+ * question of pve_vm_agent_exec shows. A longer call is refused when a
+ * question is asked, because a question that long is not read anyway.
+ */
+const EXEC_CONFIRM_MAX_CHARS = 4000;
+
 const vmAgentExec = defineTool({
   name: 'pve_vm_agent_exec',
   category: 'guests',
@@ -979,11 +987,23 @@ const vmAgentExec = defineTool({
       .optional()
       .describe('How long to wait for the command, default 30, capped by the server task limit'),
   },
-  confirmTarget: async (args, ctx) =>
-    `run ${jsonText(args.command)} in ${await guestLabel(ctx, args)}` +
-    (args.input !== undefined
-      ? ` with stdin ${quote(args.input)} (${args.input.length} characters)`
-      : ''),
+  confirmTarget: async (args, ctx) => {
+    // Shown in full, never cut, so nothing can hide in a left out middle.
+    const argv = jsonText(args.command);
+    const stdin = args.input !== undefined ? quote(args.input) : '';
+    const shown = argv.length + stdin.length;
+    if (shown > EXEC_CONFIRM_MAX_CHARS) {
+      throw new ConfirmRefusal(
+        `pve_vm_agent_exec: command and stdin are ${shown} characters as shown in the confirmation ` +
+          `question, at most ${EXEC_CONFIRM_MAX_CHARS} are shown and nothing is cut. Nothing was run. ` +
+          'Make the script shorter, or put it into a file in the guest in several shorter calls and run that file.',
+      );
+    }
+    return (
+      `run ${argv} in ${await guestLabel(ctx, args)}` +
+      (args.input !== undefined ? ` with stdin ${stdin} (${args.input.length} characters)` : '')
+    );
+  },
   handler: async (args, ctx) => {
     const g = await target(ctx, args);
     requireType(g, 'qemu', 'The guest agent');

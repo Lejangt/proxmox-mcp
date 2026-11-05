@@ -322,19 +322,28 @@ interface ToolContext {
 - Optional `ToolDef` fields: `openWorld` (download tools),
   `needsConfirmation(args, ctx)` (a write tool that asks like a destructive
   one for some arguments, also sets `destructiveHint`, may be async and read
-  from Proxmox, answers true when in doubt), `confirmTarget(args, ctx)` and
-  `local` (never talks to
-  Proxmox, no `host` argument, no client is resolved).
+  from Proxmox, answers true when in doubt), `confirmTarget(args, ctx)`,
+  `prepare(args, ctx)` (runs first and returns the arguments that
+  needsConfirmation, the confirmation binding and the handler use, so state
+  pinned there is bound and sent, runs again for the answer) and `local`
+  (never talks to Proxmox, no `host` argument, no client is resolved).
 - `confirmTarget` is required for every destructive tool and every tool with
   `needsConfirmation` (a test enforces it). It names the concrete target:
   VMID with name, type and node, node, argv, volume id, snapshot name,
   storage id, job id, method, path and parameters (credential-like values
   hidden), firewall level and rule. It may read from Proxmox through `ctx`
-  and falls back to the arguments when a lookup fails. Values are JSON
-  quoted, long values are cut in the middle with the number of left out
-  characters so start and end stay visible, and the whole question shows
-  every character outside printable ASCII as `\uXXXX` (line separators, NEL,
-  bidi controls), so a value cannot add lines or reorder the text.
+  and falls back to the full arguments when a lookup fails. Values are JSON
+  quoted and the whole question shows every character outside printable
+  ASCII as `\uXXXX` (line separators, NEL, bidi controls), so a value cannot
+  add lines or reorder the text. Values the call acts on are never cut, a
+  payload could hide in a left out middle: `quote` and `jsonText` cut only
+  when given a `max`, which is reserved for descriptive values read from
+  Proxmox (guest name, job schedule). A target longer than
+  `MAX_TARGET_CHARS` (5000, escaped) is refused instead of asked, and
+  `pve_vm_agent_exec` refuses argv plus stdin over 4000 escaped characters
+  with a hint to shorten the script or put it into a file in the guest. A
+  `confirmTarget` may throw `ConfirmRefusal` to refuse the call without
+  asking. All of this applies only when a question is asked.
 - Confirmation uses the SDK's input-required flow: the tool callback returns
   `inputRequired(...)` and is called again with the answer. The SDK fulfils it
   with a real `elicitation/create` request for clients on the 2025 protocol.
@@ -344,7 +353,18 @@ interface ToolContext {
   10 minutes. An answer is accepted only when the echoed state verifies and
   its binding matches the current call. An answer for other arguments is
   refused, an answer without state (never asked for) is ignored and the
-  question is asked.
+  question is asked. The binding covers the arguments after `prepare`.
+- `pve_firewall_rule_update` and `pve_firewall_rule_delete` use `prepare`
+  to pin the rule list: without a `digest` argument they read the rule at
+  `pos` and fill in the digest it carries, which Proxmox checks on the
+  change. Because `prepare` runs again in the answering call, a rule added,
+  moved or deleted while the user is asked gives another digest, the binding
+  no longer matches and nothing is sent. The question shows the rule only
+  when it comes from the pinned version of the list, otherwise the call is
+  refused with `ConfirmRefusal`, and needsConfirmation asks. Carrying the
+  digest inside the sealed `requestState` instead would skip the second
+  read but needs the same pinning for calls without a question, so the
+  argument path covers both with one mechanism.
 - Write and destructive tools that start a Proxmox task accept
   `wait: boolean` (default true) and return the task result (status,
   exitstatus, last log lines) or the UPID when not waiting.

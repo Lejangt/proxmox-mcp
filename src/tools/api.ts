@@ -277,9 +277,9 @@ export const apiTools: AnyToolDef[] = [
     },
     needsConfirmation: (args) => args.method === 'DELETE',
     confirmTarget: (args) =>
-      `${args.method} ${jsonText(args.path, 300)}` +
+      `${args.method} ${jsonText(args.path)}` +
       (args.params && Object.keys(args.params).length > 0
-        ? ` with ${jsonText(paramsForDisplay(args.params), 400)}`
+        ? ` with ${jsonText(paramsForDisplay(args.params))}`
         : ''),
     handler: async (args, ctx) => {
       const path = validateApiPath(args.path);

@@ -48,6 +48,43 @@ Changes to `src/proxmox/client.ts`, `src/proxmox/tls.ts`, `src/proxmox/path.ts`,
 
 Tests and examples must not contain real host names, tokens or IP addresses. Use `example.com` names, addresses from `192.0.2.0/24` and the token ID `mcp@pve!agent`.
 
+## Releasing
+
+Releases go to npm through [.github/workflows/release.yml](.github/workflows/release.yml) with [npm trusted publishing](https://docs.npmjs.com/trusted-publishers). The workflow gets a short lived OIDC token from GitHub Actions. No npm token is stored in the repository or its secrets.
+
+### Steps for each release
+
+1. Raise the version without creating a tag: `npm version <patch|minor|major> --no-git-tag-version`. This updates `package.json` and `package-lock.json`.
+2. In `CHANGELOG.md`, move the entries under `[Unreleased]` to a new section `[x.y.z] - YYYY-MM-DD`.
+3. Commit both changes to `main` and push.
+4. Tag that commit and push the tag:
+
+   ```sh
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+The workflow starts on the tag. The `verify` job fails when the tag is not exactly `v` plus the version in `package.json`. It then runs `npm ci`, lint, typecheck, tests, build and `npm run generate -- --check`, and packs the tarball. The `publish` job runs in the environment `npm`, is the only job with `id-token: write`, and publishes that tarball without running any project code. Source maps are not part of the package (`!dist/**/*.map` in `files`). Check the contents with `npm pack --dry-run`.
+
+### One time setup
+
+npm can only attach a trusted publisher to a package that already exists in the registry (see [npm trust](https://docs.npmjs.com/cli/v11/commands/npm-trust)). The first version is therefore published by hand:
+
+1. Log in with an npm account that has two factor authentication enabled: `npm login`.
+2. In a clean checkout of the release commit, run `npm ci`, then `npm publish --access public`. `prepublishOnly` runs lint, typecheck, tests, a clean build and `npm run generate -- --check` first.
+3. On npmjs.com, open the package, then Settings, Trusted publishing, and add a GitHub Actions publisher:
+   - Organization or user: `Lejangt`
+   - Repository: `proxmox-mcp`
+   - Workflow filename: `release.yml`
+   - Environment name: `npm`
+
+   All fields are case sensitive. A new trusted publisher expires when no publish succeeds with it within 2 days, so publish the next version soon after adding it, or delete and recreate it later.
+
+4. In the package settings under Publishing access, choose "Require two-factor authentication and disallow tokens". Trusted publishing keeps working, publishing with tokens stops.
+5. In the GitHub repository settings, open Environments, `npm` and restrict deployments to tags matching `v*`. Add required reviewers if the plan of the repository supports them. The workflow creates the environment on its first run if it does not exist yet.
+
+npm attaches provenance attestations automatically with trusted publishing, but only for public packages published from a public repository. While the repository is private, releases are published without provenance. No `--provenance` flag is needed once it is public.
+
 ## Reporting security gaps
 
 Report security gaps as described in [SECURITY.md](SECURITY.md).

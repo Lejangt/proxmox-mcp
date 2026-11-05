@@ -1,0 +1,102 @@
+name: Release
+
+# Publishes to npm with trusted publishing (OIDC). No npm token is stored in
+# this repository. Setup and the release steps are in CONTRIBUTING.md.
+#
+# Trigger: a pushed tag v<version>. The tag is the single release action, so a
+# release cannot be started by editing a GitHub release, and the check below
+# rejects any tag that does not match the version in package.json.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify and pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          # npm recommends no dependency cache in release builds.
+          package-manager-cache: false
+      - name: Check that the tag matches package.json
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG does not match package.json version v$version"
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run generate -- --check
+      - name: Pack
+        run: |
+          mkdir -p "$RUNNER_TEMP/package"
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/package"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package
+          path: ${{ runner.temp }}/package/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish to npm
+    needs: verify
+    runs-on: ubuntu-latest
+    # Deployment environment as a second gate. Restrict it to tags v* and, if
+    # the plan allows it, add required reviewers in the repository settings.
+    environment: npm
+    # Only this job can request an OIDC token, and it runs no project code:
+    # it publishes the tarball that the verify job built and tested.
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Ensure npm supports trusted publishing
+        # Trusted publishing needs npm 11.5.1 or newer.
+        run: |
+          current="$(npm --version)"
+          if node -e '
+            const [a, b] = process.argv.slice(1).map((v) => v.split(".").map(Number));
+            for (let i = 0; i < 3; i++) if (a[i] !== b[i]) process.exit(a[i] > b[i] ? 0 : 1);
+          ' "$current" 11.5.1; then
+            echo "npm $current is recent enough"
+          else
+            npm install -g npm@11.21.2
+          fi
+          npm --version
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package
+          path: ${{ runner.temp }}/package
+      - name: Publish
+        run: |
+          set -- "$RUNNER_TEMP"/package/*.tgz
+          if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+            echo "::error::Expected exactly one tarball"
+            exit 1
+          fi
+          npm publish "$1" --access public --ignore-scripts

@@ -30,7 +30,9 @@ import type { ConfirmMode } from '../config/types.js';
  * answer is only accepted when the echoed state verifies and its binding
  * matches the arguments of the call that carries the answer, so an answer
  * cannot be replayed for other arguments, and an answer that was never asked
- * for (no state) is ignored.
+ * for (no state) is ignored. The arguments are those returned by the tool's
+ * `prepare`, which runs again in the answering call, so state pinned there
+ * (the digest of a firewall rule list) is covered by the binding as well.
  */
 
 export type ConfirmDecision =
@@ -91,8 +93,27 @@ export function printableAscii(text: string): string {
 }
 
 /**
+ * Longest target text, after escaping, that a confirmation question carries.
+ * Values the call acts on are never cut in a question, because a model that
+ * follows injected instructions could place its payload in the part left
+ * out. A target longer than this is refused instead of shown.
+ */
+export const MAX_TARGET_CHARS = 5000;
+
+/**
+ * Thrown by a confirmTarget to refuse the call instead of asking, for example
+ * when the values it would have to show are too long to read, or when what it
+ * read from Proxmox is no longer what the call would act on.
+ */
+export class ConfirmRefusal extends Error {
+  override name = 'ConfirmRefusal';
+}
+
+/**
  * `text` when it fits, otherwise its start and its end with the number of
  * characters left out in between, so the end of a long value stays visible.
+ * Only for descriptive values read from Proxmox (a guest name, the schedule
+ * of a job), never for a value the call acts on.
  */
 export function cutMiddle(text: string, max: number): string {
   if (text.length <= max) return text;
@@ -184,6 +205,18 @@ export function decideConfirmation(req: ConfirmRequest): ConfirmDecision {
     };
   }
 
+  if (req.target !== undefined) {
+    const length = printableAscii(req.target).length;
+    if (length > MAX_TARGET_CHARS) {
+      return {
+        kind: 'refuse',
+        message:
+          `${req.tool}: the confirmation question would show ${length} characters of arguments, at most ` +
+          `${MAX_TARGET_CHARS} are shown and nothing is cut. Nothing was changed. Call it with shorter values.`,
+      };
+    }
+  }
+
   const ask: ConfirmDecision = {
     kind: 'ask',
     result: inputRequired({
@@ -206,8 +239,9 @@ export function decideConfirmation(req: ConfirmRequest): ConfirmDecision {
     return {
       kind: 'refuse',
       message:
-        `${req.tool}: the confirmation was given for a different call (tool, host or arguments differ). ` +
-        'Nothing was changed. Call the tool again to be asked for the current arguments.',
+        `${req.tool}: the confirmation was given for a different call (tool, host or arguments differ, ` +
+        'or the state the call was pinned to changed since the question). Nothing was changed. Call the ' +
+        'tool again to be asked for the current arguments.',
     };
   }
   if (answer.kind === 'elicit' && answer.action === 'accept') {

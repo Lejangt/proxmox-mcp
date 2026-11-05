@@ -149,17 +149,35 @@ The question names the concrete target: VMID with name and node, node,
 command line, volume id, snapshot, storage, job id, method with path and
 parameters (values of credential-like parameters hidden), firewall level and
 rule, and for `pve_vm_agent_exec` the argv and the stdin data. Values are
-quoted, every character outside printable ASCII is shown as `\uXXXX`
+quoted and every character outside printable ASCII is shown as `\uXXXX`
 (including line and paragraph separators, NEL and bidirectional controls),
-and a long value is cut in the middle with the number of left out
-characters, so text in a name or argument cannot add lines to the question,
-reorder it or hide its end.
+so text in a name or argument cannot add lines to the question or reorder
+it. Values the call acts on (argv, stdin, API path and parameters, firewall
+options and rule fields, volume ids, archive names) are never cut, because a
+model following injected instructions could place its payload in the left
+out part. Instead a question longer than 5000 characters is refused, and
+`pve_vm_agent_exec` refuses argv plus stdin over 4000 characters as shown
+(escaped), with the advice to make the script shorter or put it into a file
+in the guest. These refusals only happen when a question is asked. Only
+descriptive values read from Proxmox (guest name, job schedule) are cut in
+the middle.
 
 A confirmation is bound to the call it was asked for. The question carries
 a `requestState` with an HMAC over tool name, host and the canonical
 arguments, sealed with the SDK's HMAC codec. Both keys are random per process
 and a state expires after 10 minutes. An answer for different arguments is
 refused, and an answer that a client sends without being asked is ignored.
+
+`pve_firewall_rule_update` and `pve_firewall_rule_delete` address a rule by
+position, and positions shift when a rule is added, moved or deleted. When
+the call carries no `digest`, the server reads the rule at that position
+first and sends the digest of the rule list with the change, so Proxmox
+refuses it when the list changed. The digest is part of the bound arguments
+and is read again when the answer arrives, so a rule added while the user
+was asked makes the confirmation fail instead of changing whatever rule
+moved to the position. The question only shows a rule read from the same
+version of the list, otherwise the call is refused. When the rule cannot be
+read, the change is sent without digest as before.
 A declined, unanswered or refused confirmation means nothing is sent to
 Proxmox.
 
